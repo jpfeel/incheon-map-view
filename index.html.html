@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>인천 3-Active 통합 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* 기본 스타일 재정의 */
+    body, html { 
+        width: 100%; height: 100%; margin: 0; padding: 0; 
+        font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+        background-color: #f8f9fc; /* 부드러운 배경색 */
+        overflow: hidden;
+    }
+    
+    .container { display: flex; width: 100%; height: 100%; }
+    .map-area { width: 55%; height: 100%; position: relative; }
+    
+    /* 차트 영역 스크롤 및 스타일 */
+    .chart-area { 
+        width: 45%; height: 100%; 
+        background: #f8f9fc;
+        overflow-y: auto; 
+        padding: 20px; 
+        box-sizing: border-box; 
+        border-left: 1px solid #e3e6f0;
+        /* 스크롤바 디자인 */
+        scrollbar-width: thin;
+        scrollbar-color: #ccc #f0f0f0;
+    }
+    .chart-area::-webkit-scrollbar { width: 8px; }
+    .chart-area::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; }
+
+    #map { width: 100%; height: 100%; }
+    
+    /* 지도 요소 스타일 */
+    .label-overlay {
+      background: rgba(255, 255, 255, 0.95); border-radius: 20px; border: 1px solid #d1d3e2;
+      padding: 4px 10px; font-size: 11px; font-weight: 700; color: #4e73df;
+      box-shadow: 0px 2px 5px rgba(0,0,0,0.15); text-align: center; white-space: nowrap;
+      margin-top: -12px;
+    }
+
+    .dot-node {
+        width: 16px; height: 16px; border-radius: 50%;
+        border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .dot-node:hover { transform: scale(1.5); box-shadow: 0 4px 8px rgba(0,0,0,0.4); }
+    
+    .bg-green { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+    .bg-red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+    .bg-blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+    .bg-orange { background: linear-gradient(135deg, #f39c12, #e67e22); }
+
+    .tooltip {
+        position: absolute; padding: 12px 15px; 
+        background: rgba(44, 62, 80, 0.9); color: white;
+        border-radius: 8px; font-size: 13px; pointer-events: none; z-index: 10000;
+        display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); 
+        line-height: 1.6; backdrop-filter: blur(4px);
+    }
+
+    .legend {
+      position: absolute; top: 15px; left: 15px; z-index: 999;
+      background: rgba(255, 255, 255, 0.98); padding: 18px; border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1); border: 1px solid #e3e6f0;
+    }
+    .legend h3 { margin: 0 0 12px 0; font-size: 17px; font-weight: 800; color: #2e59d9; }
+    .legend-item { margin-bottom: 8px; font-size: 13px; display: flex; align-items: center; color: #5a5c69; font-weight: 500; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+    /* 차트 및 카드 스타일 */
+    .section-title {
+        font-size: 20px; font-weight: 800; color: #4e73df; margin-bottom: 20px;
+        display: flex; align-items: center;
+    }
+    .section-title::before { content: ''; display: inline-block; width: 5px; height: 24px; background: #4e73df; margin-right: 10px; border-radius: 2px; }
+
+    .chart-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .chart-card {
+        background: white; border-radius: 12px; padding: 20px;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+        border: 1px solid #e3e6f0;
+        transition: transform 0.2s;
+        /* 넘치는 내용 숨김 처리 */
+        overflow: hidden; 
+    }
+    .chart-card:hover { transform: translateY(-3px); }
+    .chart-card.full-width { grid-column: span 2; }
+    
+    .chart-title { 
+        font-size: 15px; font-weight: 700; margin-bottom: 15px; 
+        color: #5a5c69; border-bottom: 1px solid #f0f1f5; padding-bottom: 10px; 
+    }
+    
+    /* KPI 카드 스타일 */
+    .kpi-container { display: flex; justify-content: space-between; margin-bottom: 25px; gap: 15px; }
+    .kpi-card { 
+        flex: 1; background: white; padding: 20px; border-radius: 12px; 
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+        border-left: 5px solid #4e73df;
+        position: relative; overflow: hidden;
+    }
+    .kpi-card:nth-child(2) { border-left-color: #1cc88a; }
+    .kpi-card:nth-child(3) { border-left-color: #36b9cc; }
+    
+    .kpi-label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #4e73df; margin-bottom: 5px; }
+    .kpi-card:nth-child(2) .kpi-label { color: #1cc88a; }
+    .kpi-card:nth-child(3) .kpi-label { color: #36b9cc; }
+
+    .kpi-value { font-size: 24px; font-weight: 800; color: #5a5c69; }
+    .kpi-sub { font-size: 12px; font-weight: 600; margin-top: 5px; }
+    .text-up { color: #e74a3b; } /* 상승 */
+    .text-gray { color: #858796; } /* 설명 */
+
+  </style>
+</head>
+<body>
+
+<div id="tooltip" class="tooltip"></div>
+
+<div class="container">
+  <div class="map-area">
+      <div id="map"></div>
+      <div class="legend">
+        <h3>INCHEON 3-ACTIVE</h3>
+        <div class="legend-item"><span class="dot" style="background:#2ecc71;"></span>거점 도서관 (Hub)</div>
+        <div class="legend-item"><span class="dot" style="background:#e74c3c;"></span>Cold Spot (지원필요)</div>
+        <div class="legend-item"><span class="dot" style="background:#3498db;"></span>참여 학교 (School)</div>
+        <div class="legend-item"><span class="dot" style="background:#f39c12;"></span>협력 서점 (Store)</div>
+        <hr style="margin: 12px 0; border:0; border-top:1px solid #e3e6f0;">
+        <div class="legend-item"><span style="color:#3498db; margin-right:8px; font-weight:bold; font-size:18px;">━━</span> 학교 연계 트래픽</div>
+        <div class="legend-item"><span style="color:#f39c12; margin-right:8px; font-weight:bold; font-size:18px;">┅┅</span> 서점 연계 트래픽</div>
+      </div>
+  </div>
+
+  <div class="chart-area">
+      <div class="section-title">통합 성과 대시보드</div>
+
+      <div class="kpi-container">
+          <div class="kpi-card">
+              <div class="kpi-label">학생 긍정 정서</div>
+              <div class="kpi-value">78.4점</div>
+              <div class="kpi-sub text-up">▲ 12.0% (전년 대비)</div>
+          </div>
+          <div class="kpi-card">
+              <div class="kpi-label">지역서점 매출 기여</div>
+              <div class="kpi-value">12.5억</div>
+              <div class="kpi-sub text-gray">Local Economy</div>
+          </div>
+          <div class="kpi-card">
+              <div class="kpi-label">사회적 비용 절감</div>
+              <div class="kpi-value">4.8억</div>
+              <div class="kpi-sub text-gray">의료비 절감 추정</div>
+          </div>
+      </div>
+
+      <div class="chart-grid">
+          <div class="chart-card">
+              <div class="chart-title">1. 지역별 3-Active 활동 강도</div>
+              <canvas id="activityChart"></canvas>
+          </div>
+
+          <div class="chart-card">
+              <div class="chart-title">2. 지역 특성 (부평 vs 서구)</div>
+              <canvas id="radarChart"></canvas>
+          </div>
+
+          <div class="chart-card">
+              <div class="chart-title">3. 참여 활성 학교 Top 5</div>
+              <canvas id="topSchoolChart"></canvas>
+          </div>
+
+          <div class="chart-card">
+              <div class="chart-title">4. 참여자 구성 비율</div>
+              <div style="position: relative; height: 220px; width: 100%;">
+                  <canvas id="userPieChart"></canvas>
+              </div>
+          </div>
+
+          <div class="chart-card full-width">
+              <div class="chart-title">5. 월별 통합 트래픽 성장 추이</div>
+              <canvas id="monthlyTrendChart" height="80"></canvas>
+          </div>
+
+          <div class="chart-card">
+              <div class="chart-title">6. 인기 도서 카테고리</div>
+              <canvas id="bookCategoryChart"></canvas>
+          </div>
+
+          <div class="chart-card">
+              <div class="chart-title">7. 프로그램 만족도 상세</div>
+              <canvas id="satisfactionChart"></canvas>
+          </div>
+
+          <div class="chart-card">
+              <div class="chart-title">8. 거리(km)별 참여율 상관관계</div>
+              <canvas id="distanceChart"></canvas>
+          </div>
+
+          <div class="chart-card full-width">
+              <div class="chart-title">9. 탄소 배출 감축 효과 (ESG)</div>
+              <canvas id="lineChart" height="80"></canvas>
+          </div>
+      </div>
+      <br><br>
+  </div>
+</div>
+
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a355516d451bb52744d83c5763eb1560&autoload=false"></script>
+
+<script>
+  // ---------------------------------------------------------
+  // 1) 툴팁 로직
+  // ---------------------------------------------------------
+  var tooltip = document.getElementById('tooltip');
+  function showTooltip(e, text) {
+      tooltip.style.display = 'block';
+      tooltip.innerHTML = text;
+      tooltip.style.left = (e.clientX + 20) + 'px';
+      tooltip.style.top = (e.clientY + 20) + 'px';
+  }
+  function hideTooltip() {
+      tooltip.style.display = 'none';
+  }
+
+  // ---------------------------------------------------------
+  // 2) 카카오 지도 로직
+  // ---------------------------------------------------------
+  kakao.maps.load(function () {
+    var mapContainer = document.getElementById('map');
+    var mapOption = { center: new kakao.maps.LatLng(37.50, 126.68), level: 9 };
+    var map = new kakao.maps.Map(mapContainer, mapOption);
+
+    var hubs = [{"name": "북구도서관", "lat": 37.5066218, "lng": 126.7230735, "type": "Hub", "region": "부평권"}, {"name": "부평도서관", "lat": 37.4849744, "lng": 126.7045964, "type": "Hub", "region": "부평권"}, {"name": "계양도서관", "lat": 37.5459641, "lng": 126.7301965, "type": "Hub", "region": "계양권"}, {"name": "서구도서관", "lat": 37.4943306, "lng": 126.6796541, "type": "Hub", "region": "서구권"}, {"name": "주안도서관", "lat": 37.4554851, "lng": 126.6927471, "type": "Hub", "region": "미추홀권"}, {"name": "중앙도서관", "lat": 37.4556557, "lng": 126.7025455, "type": "Hub", "region": "남동권"}, {"name": "연수도서관", "lat": 37.4178463, "lng": 126.6852658, "type": "Hub", "region": "연수권"}, {"name": "화도진도서관", "lat": 37.4817612, "lng": 126.6282561, "type": "Hub", "region": "동구권"}, {"name": "강화도서관", "lat": 37.7488175, "lng": 126.4831844, "type": "Cold Spot", "region": "강화권"}];
+    var schools = [{"name": "부평여고", "lat": 37.5005587, "lng": 126.7196623, "hub": "북구도서관", "traffic": 320}, {"name": "부광중", "lat": 37.5012607, "lng": 126.7368838, "hub": "북구도서관", "traffic": 210}, {"name": "부평동초", "lat": 37.4996601, "lng": 126.72374, "hub": "부평도서관", "traffic": 150}, {"name": "부평고", "lat": 37.5022465, "lng": 126.7275792, "hub": "부평도서관", "traffic": 180}, {"name": "계산고", "lat": 37.5469338, "lng": 126.7296607, "hub": "계양도서관", "traffic": 290}, {"name": "작전중", "lat": 37.5333644, "lng": 126.7295462, "hub": "계양도서관", "traffic": 220}, {"name": "가좌고", "lat": 37.4894556, "lng": 126.680834, "hub": "서구도서관", "traffic": 190}, {"name": "가림고", "lat": 37.4928274, "lng": 126.6812112, "hub": "서구도서관", "traffic": 160}, {"name": "청라고", "lat": 37.5369893, "lng": 126.6607886, "hub": "서구도서관", "traffic": 310}, {"name": "구월중", "lat": 37.4553432, "lng": 126.7092909, "hub": "중앙도서관", "traffic": 250}, {"name": "석정여고", "lat": 37.4686806, "lng": 126.6946944, "hub": "중앙도서관", "traffic": 200}, {"name": "인천여고", "lat": 37.422241, "lng": 126.6896458, "hub": "연수도서관", "traffic": 280}, {"name": "연수고", "lat": 37.4114651, "lng": 126.6798641, "hub": "연수도서관", "traffic": 260}, {"name": "박문여고", "lat": 37.3827092, "lng": 126.6660388, "hub": "연수도서관", "traffic": 140}, {"name": "학익고", "lat": 37.4390469, "lng": 126.6633655, "hub": "주안도서관", "traffic": 170}, {"name": "주안남초", "lat": 37.4502383, "lng": 126.685418, "hub": "주안도서관", "traffic": 130}, {"name": "제물포고", "lat": 37.4766308, "lng": 126.6239769, "hub": "화도진도서관", "traffic": 190}, {"name": "인일여고", "lat": 37.4779465, "lng": 126.6261618, "hub": "화도진도서관", "traffic": 210}, {"name": "강화여고", "lat": 37.7546656, "lng": 126.478954, "hub": "강화도서관", "traffic": 110}, {"name": "갑룡초", "lat": 37.7436611, "lng": 126.5029419, "hub": "강화도서관", "traffic": 90}];
+    var bookstores = [{"name": "더북스", "lat": 37.4897746, "lng": 126.7233082, "hub": "부평도서관", "traffic": 80}, {"name": "낮잠과바람", "lat": 37.5086005, "lng": 126.7278369, "hub": "북구도서관", "traffic": 60}, {"name": "책방산책", "lat": 37.5404568, "lng": 126.7190295, "hub": "계양도서관", "traffic": 70}, {"name": "세종문고", "lat": 37.4115479, "lng": 126.6786156, "hub": "연수도서관", "traffic": 95}, {"name": "열다책방", "lat": 37.4066529, "lng": 126.6714896, "hub": "연수도서관", "traffic": 50}, {"name": "위즈덤스퀘어", "lat": 37.425, "lng": 126.655, "hub": "중앙도서관", "traffic": 85}, {"name": "미래문고", "lat": 37.4869218, "lng": 126.7391518, "hub": "서구도서관", "traffic": 110}, {"name": "서점안착", "lat": 37.534924, "lng": 126.6515736, "hub": "서구도서관", "traffic": 65}, {"name": "나비날다", "lat": 37.4728064, "lng": 126.6361411, "hub": "화도진도서관", "traffic": 40}, {"name": "한미서점", "lat": 37.4725453, "lng": 126.636669, "hub": "주안도서관", "traffic": 55}, {"name": "나즌문턱", "lat": 37.4723723, "lng": 126.6373493, "hub": "화도진도서관", "traffic": 45}];
+
+    // Hub
+    hubs.forEach(function(hub) {
+      var colorClass = (hub.type === 'Cold Spot') ? 'bg-red' : 'bg-green';
+      var pos = new kakao.maps.LatLng(hub.lat, hub.lng);
+      
+      var content = document.createElement('div');
+      content.className = 'dot-node ' + colorClass;
+      content.onmousemove = function(e) { showTooltip(e, '<span style="color:#4e73df; font-weight:bold;">' + hub.name + '</span><br>' + hub.type); };
+      content.onmouseout = hideTooltip;
+
+      new kakao.maps.CustomOverlay({ map: map, position: pos, content: content, yAnchor: 0.5, zIndex: 3 });
+      
+      var labelContent = '<div class="label-overlay">' + hub.name + '</div>';
+      new kakao.maps.CustomOverlay({ map: map, position: pos, content: labelContent, yAnchor: 2.3, zIndex: 2 });
+      
+      var circleColor = (hub.type === 'Cold Spot') ? '#e74c3c' : '#2ecc71';
+      var circle = new kakao.maps.Circle({ 
+          center: pos, radius: 400, strokeWeight: 0, 
+          fillColor: circleColor, fillOpacity: 0.15 
+      });
+      circle.setMap(map);
+    });
+
+    // Schools
+    schools.forEach(function(school) {
+      var pos = new kakao.maps.LatLng(school.lat, school.lng);
+      var content = document.createElement('div');
+      content.className = 'dot-node bg-blue';
+      content.onmousemove = function(e) { showTooltip(e, '<span style="color:#3498db; font-weight:bold;">' + school.name + '</span><br>연계 트래픽: ' + school.traffic); };
+      content.onmouseout = hideTooltip;
+
+      new kakao.maps.CustomOverlay({ map: map, position: pos, content: content, yAnchor: 0.5, zIndex: 3 });
+
+      var hub = hubs.find(h => h.name === school.hub);
+      if (hub) {
+        var linePath = [new kakao.maps.LatLng(hub.lat, hub.lng), pos];
+        new kakao.maps.Polyline({ 
+            path: linePath, 
+            strokeWeight: 5, 
+            strokeColor: '#3498db', 
+            strokeOpacity: 0.9, 
+            map: map 
+        });
+      }
+    });
+
+    // Bookstores
+    bookstores.forEach(function(store) {
+      var pos = new kakao.maps.LatLng(store.lat, store.lng);
+      var content = document.createElement('div');
+      content.className = 'dot-node bg-orange';
+      content.onmousemove = function(e) { showTooltip(e, '<span style="color:#f39c12; font-weight:bold;">' + store.name + '</span><br>연계 트래픽: ' + store.traffic); };
+      content.onmouseout = hideTooltip;
+
+      new kakao.maps.CustomOverlay({ map: map, position: pos, content: content, yAnchor: 0.5, zIndex: 4 });
+
+      var labelContent = '<div class="label-overlay" style="border-color:#f39c12; color:#f39c12;">' + store.name + '</div>';
+      new kakao.maps.CustomOverlay({ map: map, position: pos, content: labelContent, yAnchor: 1.9, zIndex: 2 });
+
+      var hub = hubs.find(h => h.name === store.hub);
+      if (hub) {
+        var linePath = [new kakao.maps.LatLng(hub.lat, hub.lng), pos];
+        new kakao.maps.Polyline({ 
+            path: linePath, 
+            strokeWeight: 5, 
+            strokeColor: '#f39c12', 
+            strokeStyle: 'dashed', 
+            strokeOpacity: 0.9, 
+            map: map 
+        });
+      }
+    });
+  });
+
+  // ---------------------------------------------------------
+  // 3) Chart.js 그래프 생성
+  // ---------------------------------------------------------
+  Chart.defaults.font.family = "'Noto Sans KR', sans-serif";
+  Chart.defaults.color = '#858796';
+  
+  function createGradient(ctx, colorStart, colorEnd) {
+      var gradient = ctx.createLinearGradient(0, 0, 0, 400);
+      gradient.addColorStop(0, colorStart);
+      gradient.addColorStop(1, colorEnd);
+      return gradient;
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+      
+      // 1. 지역별 활동 강도
+      var ctx1 = document.getElementById('activityChart').getContext('2d');
+      new Chart(ctx1, {
+          type: 'bar',
+          data: {
+              labels: ["강화", "서구", "계양", "부평", "미추홀", "중앙", "남동", "연수"],
+              datasets: [
+                  { label: '읽고', data: [25, 57, 93, 92, 64, 94, 89, 94], backgroundColor: '#4e73df', borderRadius: 4 },
+                  { label: '걷고', data: [25, 86, 80, 87, 78, 76, 88, 83], backgroundColor: '#1cc88a', borderRadius: 4 },
+                  { label: '쓰고', data: [32, 86, 89, 92, 63, 87, 65, 88], backgroundColor: '#36b9cc', borderRadius: 4 }
+              ]
+          },
+          options: {
+              responsive: true,
+              scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
+              plugins: { legend: { position: 'bottom' } }
+          }
+      });
+
+      // 2. 지역 특성 분석
+      new Chart(document.getElementById('radarChart'), {
+          type: 'radar',
+          data: {
+              labels: ["읽기(Reading)", "걷기(Walking)", "쓰기(Writing)"],
+              datasets: [
+                  { label: '부평권', data: [90, 85, 92], borderColor: '#4e73df', backgroundColor: 'rgba(78, 115, 223, 0.2)', borderWidth: 2 },
+                  { label: '서구권', data: [60, 80, 85], borderColor: '#1cc88a', backgroundColor: 'rgba(28, 200, 138, 0.2)', borderWidth: 2 }
+              ]
+          },
+          options: { responsive: true }
+      });
+
+      // 3. 상위 학교
+      var ctx3 = document.getElementById('topSchoolChart').getContext('2d');
+      var gradBlue = createGradient(ctx3, '#4e73df', '#224abe');
+      new Chart(ctx3, {
+          type: 'bar',
+          data: {
+              labels: ["부평여고", "청라고", "계산고", "인천여고", "연수고"],
+              datasets: [{ label: '참여 트래픽', data: [320, 310, 290, 280, 260], backgroundColor: gradBlue, borderRadius: 5, barThickness: 20 }]
+          },
+          options: { indexAxis: 'y', responsive: true, scales: { x: { grid: { display: false } }, y: { grid: { display: false } } } }
+      });
+
+      // 4. 참여자 구성 (수정됨: maintainAspectRatio: false, legend: bottom)
+      new Chart(document.getElementById('userPieChart'), {
+          type: 'doughnut',
+          data: {
+              labels: ["학생", "학부모", "일반인", "교사"],
+              datasets: [{ 
+                  data: [65, 15, 12, 8], 
+                  backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'],
+                  hoverOffset: 4
+              }]
+          },
+          options: { 
+              cutout: '65%', 
+              plugins: { legend: { position: 'bottom', labels: { padding: 20 } } },
+              responsive: true,
+              maintainAspectRatio: false
+          }
+      });
+
+      // 5. 월별 트래픽 추이
+      var ctx5 = document.getElementById('monthlyTrendChart').getContext('2d');
+      new Chart(ctx5, {
+          type: 'line',
+          data: {
+              labels: ["1월", "2월", "3월", "4월", "5월", "6월"],
+              datasets: [
+                  { label: '학교 연계', data: [800, 950, 1200, 1150, 1300, 1450], borderColor: '#4e73df', backgroundColor: 'rgba(78, 115, 223, 0.05)', fill: true, tension: 0.4, borderWidth: 3 },
+                  { label: '서점 연계', data: [300, 320, 450, 480, 520, 600], borderColor: '#f6c23e', backgroundColor: 'rgba(246, 194, 62, 0.05)', fill: true, tension: 0.4, borderWidth: 3 }
+              ]
+          },
+          options: { responsive: true, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false } } } }
+      });
+
+      // 6. 인기 도서
+      new Chart(document.getElementById('bookCategoryChart'), {
+          type: 'bar',
+          data: {
+              labels: ["문학/소설", "인문/사회", "과학/기술", "예술/취미", "자기계발"],
+              datasets: [{ label: '비중(%)', data: [45, 20, 15, 10, 10], backgroundColor: '#8e44ad', borderRadius: 4 }]
+          },
+          options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+
+      // 7. 만족도 조사
+      new Chart(document.getElementById('satisfactionChart'), {
+          type: 'polarArea',
+          data: {
+              labels: ["프로그램 질", "시설 접근성", "혜택 다양성", "소통 원활성", "지속 가능성"],
+              datasets: [{ data: [92, 85, 78, 88, 80], backgroundColor: ['rgba(78, 115, 223, 0.7)', 'rgba(28, 200, 138, 0.7)', 'rgba(54, 185, 204, 0.7)', 'rgba(246, 194, 62, 0.7)', 'rgba(231, 74, 59, 0.7)'] }]
+          },
+          options: { scales: { r: { ticks: { backdropColor: 'transparent' } } } }
+      });
+
+      // 8. 거리별 상관관계
+      new Chart(document.getElementById('distanceChart'), {
+          type: 'scatter',
+          data: {
+              datasets: [{ label: '거리 vs 참여율', data: [{"x": 0.5, "y": 95}, {"x": 1.2, "y": 88}, {"x": 2.5, "y": 70}, {"x": 3.0, "y": 65}, {"x": 0.8, "y": 92}, {"x": 4.5, "y": 40}, {"x": 1.5, "y": 80}, {"x": 5.0, "y": 30}, {"x": 2.0, "y": 75}, {"x": 3.5, "y": 55}, {"x": 4.0, "y": 45}], backgroundColor: '#e74a3b', pointRadius: 5, pointHoverRadius: 8 }]
+          },
+          options: { scales: { x: { title: { display: true, text: '거점과의 거리 (km)' } }, y: { title: { display: true, text: '참여율 (%)' } } } }
+      });
+
+      // 9. 탄소 감축
+      var ctx9 = document.getElementById('lineChart').getContext('2d');
+      var gradGreen = createGradient(ctx9, 'rgba(28, 200, 138, 0.5)', 'rgba(28, 200, 138, 0.0)');
+      new Chart(ctx9, {
+          type: 'line',
+          data: {
+              labels: ['1월', '2월', '3월', '4월', '5월', '6월'],
+              datasets: [{ label: '탄소 감축량 (톤)', data: [120, 150, 180, 200, 220, 240], borderColor: '#1cc88a', backgroundColor: gradGreen, fill: true, tension: 0.4, borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#1cc88a', pointRadius: 5 }]
+          },
+          options: { responsive: true, scales: { x: { grid: { display: false } } } }
+      });
+  });
+</script>
+
+</body>
+</html>
